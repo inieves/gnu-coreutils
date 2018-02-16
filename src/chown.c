@@ -14,7 +14,9 @@
    You should have received a copy of the GNU General Public License
    along with this program.  If not, see <https://www.gnu.org/licenses/>.  */
 
-/* Written by David MacKenzie <djm@gnu.ai.mit.edu>. */
+/* Written by David MacKenzie <djm@gnu.ai.mit.edu>
+              Jim Meyering <meyering@fb.com>
+              Ian Morris Nieves <inieves@alumni.cmu.edu> */
 
 #include <config.h>
 #include <stdio.h>
@@ -35,7 +37,8 @@
 
 #define AUTHORS \
   proper_name ("David MacKenzie"), \
-  proper_name ("Jim Meyering")
+  proper_name ("Jim Meyering"), \
+  proper_name ("Ian Morris Nieves")
 
 /* The argument to the --reference option.  Use the owner and group IDs
    of this file.  This file must exist.  */
@@ -49,11 +52,15 @@ enum
   FROM_OPTION,
   NO_PRESERVE_ROOT,
   PRESERVE_ROOT,
-  REFERENCE_FILE_OPTION
+  REFERENCE_FILE_OPTION,
+  EXCLUDE_DIRECTORIES,
+  EXCLUDE_FILES
 };
 
 static struct option const long_options[] =
 {
+  {"exclude-directories", no_argument, NULL, EXCLUDE_DIRECTORIES},
+  {"exclude-files", no_argument, NULL, EXCLUDE_FILES},
   {"recursive", no_argument, NULL, 'R'},
   {"changes", no_argument, NULL, 'c'},
   {"dereference", no_argument, NULL, DEREFERENCE_OPTION},
@@ -88,36 +95,42 @@ With --reference, change the owner and group of each FILE to those of RFILE.\n\
 \n\
 "), stdout);
       fputs (_("\
-  -c, --changes          like verbose but report only when a change is made\n\
-  -f, --silent, --quiet  suppress most error messages\n\
-  -v, --verbose          output a diagnostic for every file processed\n\
+  -c, --changes              like verbose but report only when a change is made\n\
+  -f, --silent, --quiet      suppress most error messages\n\
+  -v, --verbose              output a diagnostic for every file processed\n\
 "), stdout);
       fputs (_("\
-      --dereference      affect the referent of each symbolic link (this is\n\
-                         the default), rather than the symbolic link itself\n\
-  -h, --no-dereference   affect symbolic links instead of any referenced file\n\
+      --dereference          affect the referent of each symbolic link (this is\n\
+                             the default), rather than the symbolic link itself\n\
+  -h, --no-dereference       affect symbolic links instead of any referenced file\n\
 "), stdout);
       fputs (_("\
-                         (useful only on systems that can change the\n\
-                         ownership of a symlink)\n\
+                             (useful only on systems that can change the\n\
+                             ownership of a symlink)\n\
 "), stdout);
       fputs (_("\
       --from=CURRENT_OWNER:CURRENT_GROUP\n\
-                         change the owner and/or group of each file only if\n\
-                         its current owner and/or group match those specified\n\
-                         here.  Either may be omitted, in which case a match\n\
-                         is not required for the omitted attribute\n\
+                             change the owner and/or group of each file only if\n\
+                             its current owner and/or group match those specified\n\
+                             here.  Either may be omitted, in which case a match\n\
+                             is not required for the omitted attribute\n\
 "), stdout);
       fputs (_("\
-      --no-preserve-root  do not treat '/' specially (the default)\n\
-      --preserve-root    fail to operate recursively on '/'\n\
+      --no-preserve-root     do not treat '/' specially (the default)\n\
+      --preserve-root        fail to operate recursively on '/'\n\
 "), stdout);
       fputs (_("\
-      --reference=RFILE  use RFILE's owner and group rather than\n\
-                         specifying OWNER:GROUP values\n\
+      --reference=RFILE      use RFILE's owner and group rather than\n\
+                             specifying OWNER:GROUP values\n\
 "), stdout);
       fputs (_("\
-  -R, --recursive        operate on files and directories recursively\n\
+      --exclude-directories  don't change directories\n\
+"), stdout);
+      fputs (_("\
+      --exclude-files        don't change files\n\
+"), stdout);
+      fputs (_("\
+  -R, --recursive            operate on files and directories recursively\n\
 "), stdout);
       fputs (_("\
 \n\
@@ -125,11 +138,11 @@ The following options modify how a hierarchy is traversed when the -R\n\
 option is also specified.  If more than one is specified, only the final\n\
 one takes effect.\n\
 \n\
-  -H                     if a command line argument is a symbolic link\n\
-                         to a directory, traverse it\n\
-  -L                     traverse every symbolic link to a directory\n\
-                         encountered\n\
-  -P                     do not traverse any symbolic links (default)\n\
+  -H                         if a command line argument is a symbolic link\n\
+                             to a directory, traverse it\n\
+  -L                         traverse every symbolic link to a directory\n\
+                             encountered\n\
+  -P                         do not traverse any symbolic links (default)\n\
 \n\
 "), stdout);
       fputs (HELP_OPTION_DESCRIPTION, stdout);
@@ -234,6 +247,14 @@ main (int argc, char **argv)
               die (EXIT_FAILURE, 0, "%s: %s", e, quote (optarg));
             break;
           }
+
+        case EXCLUDE_DIRECTORIES:
+          chopt.exclude_directories = true;
+          break;
+
+        case EXCLUDE_FILES:
+          chopt.exclude_files = true;
+          break;
 
         case 'R':
           chopt.recurse = true;

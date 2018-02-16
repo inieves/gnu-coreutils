@@ -14,7 +14,9 @@
    You should have received a copy of the GNU General Public License
    along with this program.  If not, see <https://www.gnu.org/licenses/>.  */
 
-/* Written by David MacKenzie <djm@gnu.ai.mit.edu> */
+/* Written by David MacKenzie <djm@gnu.ai.mit.edu>
+              Jim Meyering <meyering@fb.com>
+              Ian Morris Nieves <inieves@alumni.cmu.edu> */
 
 #include <config.h>
 #include <stdio.h>
@@ -37,7 +39,8 @@
 
 #define AUTHORS \
   proper_name ("David MacKenzie"), \
-  proper_name ("Jim Meyering")
+  proper_name ("Jim Meyering"), \
+  proper_name ("Ian Morris Nieves")
 
 enum Change_status
 {
@@ -68,6 +71,12 @@ static mode_t umask_value;
 /* If true, change the modes of directories recursively. */
 static bool recurse;
 
+/* If true, don't change the modes of files. */
+static bool exclude_files;
+
+/* If true, don't change the modes of directories. */
+static bool exclude_directories;
+
 /* If true, force silence (suppress most of error messages). */
 static bool force_silent;
 
@@ -89,12 +98,16 @@ enum
 {
   NO_PRESERVE_ROOT = CHAR_MAX + 1,
   PRESERVE_ROOT,
-  REFERENCE_FILE_OPTION
+  REFERENCE_FILE_OPTION,
+  EXCLUDE_DIRECTORIES,
+  EXCLUDE_FILES
 };
 
 static struct option const long_options[] =
 {
   {"changes", no_argument, NULL, 'c'},
+  {"exclude-directories", no_argument, NULL, EXCLUDE_DIRECTORIES},
+  {"exclude-files", no_argument, NULL, EXCLUDE_FILES},
   {"recursive", no_argument, NULL, 'R'},
   {"no-preserve-root", no_argument, NULL, NO_PRESERVE_ROOT},
   {"preserve-root", no_argument, NULL, PRESERVE_ROOT},
@@ -194,6 +207,35 @@ process_file (FTS *fts, FTSENT *ent)
   mode_t new_mode IF_LINT ( = 0);
   bool ok = true;
   bool chmod_succeeded = false;
+
+  if (exclude_directories)
+    {
+      switch (ent->fts_info)
+        {
+          case FTS_D:
+          case FTS_DC:
+          case FTS_DNR:
+          case FTS_DOT:
+          case FTS_DP:
+            return true;
+          default:
+            break;
+        }
+    }
+
+  if (exclude_files)
+    {
+      switch (ent->fts_info)
+        {
+          case FTS_DEFAULT:
+          case FTS_F:
+          case FTS_NS:
+          case FTS_NSOK:
+            return true;
+          default:
+            break;
+        }
+    }
 
   switch (ent->fts_info)
     {
@@ -340,6 +382,7 @@ process_files (char **files, int bit_flags)
       FTSENT *ent;
 
       ent = fts_read (fts);
+
       if (ent == NULL)
         {
           if (errno != 0)
@@ -383,19 +426,25 @@ With --reference, change the mode of each FILE to that of RFILE.\n\
 \n\
 "), stdout);
       fputs (_("\
-  -c, --changes          like verbose but report only when a change is made\n\
-  -f, --silent, --quiet  suppress most error messages\n\
-  -v, --verbose          output a diagnostic for every file processed\n\
+  -c, --changes              like verbose but report only when a change is made\n\
+  -f, --silent, --quiet      suppress most error messages\n\
+  -v, --verbose              output a diagnostic for every file processed\n\
 "), stdout);
       fputs (_("\
-      --no-preserve-root  do not treat '/' specially (the default)\n\
-      --preserve-root    fail to operate recursively on '/'\n\
+      --no-preserve-root     do not treat '/' specially (the default)\n\
+      --preserve-root        fail to operate recursively on '/'\n\
 "), stdout);
       fputs (_("\
-      --reference=RFILE  use RFILE's mode instead of MODE values\n\
+      --reference=RFILE      use RFILE's mode instead of MODE values\n\
 "), stdout);
       fputs (_("\
-  -R, --recursive        change files and directories recursively\n\
+      --exclude-directories  don't change directories\n\
+"), stdout);
+      fputs (_("\
+      --exclude-files        don't change files\n\
+"), stdout);
+      fputs (_("\
+  -R, --recursive            change files and directories recursively\n\
 "), stdout);
       fputs (HELP_OPTION_DESCRIPTION, stdout);
       fputs (VERSION_OPTION_DESCRIPTION, stdout);
@@ -430,7 +479,7 @@ main (int argc, char **argv)
 
   atexit (close_stdout);
 
-  recurse = force_silent = diagnose_surprises = false;
+  recurse = exclude_files = exclude_directories = force_silent = diagnose_surprises = false;
 
   while ((c = getopt_long (argc, argv,
                            ("Rcfvr::w::x::X::s::t::u::g::o::a::,::+::=::"
@@ -489,6 +538,12 @@ main (int argc, char **argv)
           break;
         case REFERENCE_FILE_OPTION:
           reference_file = optarg;
+          break;
+        case EXCLUDE_DIRECTORIES:
+          exclude_directories = true;
+          break;
+        case EXCLUDE_FILES:
+          exclude_files = true;
           break;
         case 'R':
           recurse = true;

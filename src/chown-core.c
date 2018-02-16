@@ -14,7 +14,8 @@
    You should have received a copy of the GNU General Public License
    along with this program.  If not, see <https://www.gnu.org/licenses/>.  */
 
-/* Extracted from chown.c/chgrp.c and librarified by Jim Meyering.  */
+/* Extracted from chown.c/chgrp.c and librarified by Jim Meyering.
+   Added to by Ian Morris Nieves <inieves@alumni.cmu.edu> */
 
 #include <config.h>
 #include <stdio.h>
@@ -61,6 +62,8 @@ chopt_init (struct Chown_option *chopt)
   chopt->root_dev_ino = NULL;
   chopt->affect_symlink_referent = true;
   chopt->recurse = false;
+  chopt->exclude_files = false;
+  chopt->exclude_directories = false;
   chopt->force_silent = false;
   chopt->user_name = NULL;
   chopt->group_name = NULL;
@@ -280,6 +283,35 @@ change_file_owner (FTS *fts, FTSENT *ent,
   bool ok = true;
   bool do_chown;
   bool symlink_changed = true;
+
+  if (chopt->exclude_directories)
+    {
+      switch (ent->fts_info)
+        {
+          case FTS_D:
+          case FTS_DC:
+          case FTS_DNR:
+          case FTS_DOT:
+          case FTS_DP:
+            return true;
+          default:
+            break;
+        }
+    }
+
+  if (chopt->exclude_files)
+    {
+      switch (ent->fts_info)
+        {
+          case FTS_DEFAULT:
+          case FTS_F:
+          case FTS_NS:
+          case FTS_NSOK:
+            return true;
+          default:
+            break;
+        }
+    }
 
   switch (ent->fts_info)
     {

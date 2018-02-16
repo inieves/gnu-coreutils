@@ -45,6 +45,12 @@ struct Chown_option
   /* Level of verbosity.  */
   enum Verbosity verbosity;
 
+  /* If nonzero, don't change the ownership of files. */
+  bool exclude_files;
+
+  /* If nonzero, don't change the ownership of directories. */
+  bool exclude_directories;
+
   /* If nonzero, change the ownership of directories recursively. */
   bool recurse;
 
